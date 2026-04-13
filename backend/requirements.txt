@@ -1,0 +1,25 @@
+# AgentGround — Python Dependencies
+# Install with: pip install -r requirements.txt
+# Python 3.10+ required
+
+# ─── UI ───────────────────────────────────────────────────────────────────────
+streamlit==1.35.0
+
+# ─── Agent Framework ──────────────────────────────────────────────────────────
+langchain==0.2.16
+langchain-community==0.2.16
+langchain-openai==0.1.23
+
+# ─── Database ─────────────────────────────────────────────────────────────────
+sqlalchemy==2.0.36
+pymysql==1.1.1
+cryptography==43.0.3          # required by pymysql for SSL support
+
+# ─── Environment Variables ────────────────────────────────────────────────────
+python-dotenv==1.0.1
+
+# ─── HTTP / Utilities ─────────────────────────────────────────────────────────
+requests==2.32.3
+
+# ─── Web Search Tool (LangChain) ──────────────────────────────────────────────
+duckduckgo-search==6.3.5
