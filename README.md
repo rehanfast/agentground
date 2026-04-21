@@ -124,7 +124,7 @@ EXIT;
 ### 3. Clone repository and install dependencies
 
 ```bash
-git clone [https://github.com/rehanfast/agentground.git](https://github.com/rehanfast/agentground.git)
+git clone https://github.com/rehanfast/agentground
 cd agentground
 python3 -m venv venv
 source venv/bin/activate
