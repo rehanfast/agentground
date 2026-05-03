@@ -1,6 +1,8 @@
 """
 backend/app/env_manager.py
 CRUD operations for Environments.
+All public functions accept db_name to route queries to the correct
+per-user database (agentground_<username>).
 """
 
 from sqlalchemy.exc import IntegrityError
@@ -8,7 +10,7 @@ from backend.app.database import get_session
 from backend.app.models import Environment
 
 
-def create_environment(name: str, description: str = "") -> tuple[bool, str]:
+def create_environment(name: str, description: str = "", db_name: str = "") -> tuple[bool, str]:
     """
     Create a new environment.
     Returns (True, "ok") on success, (False, error_message) on failure.
@@ -19,7 +21,7 @@ def create_environment(name: str, description: str = "") -> tuple[bool, str]:
     if len(name) > 100:
         return False, "Environment name must not exceed 100 characters."
 
-    session = get_session()
+    session = get_session(db_name)
     try:
         env = Environment(name=name, description=description.strip())
         session.add(env)
@@ -35,9 +37,9 @@ def create_environment(name: str, description: str = "") -> tuple[bool, str]:
         session.close()
 
 
-def list_environments() -> list[dict]:
+def list_environments(db_name: str = "") -> list[dict]:
     """Return all environments as a list of dicts."""
-    session = get_session()
+    session = get_session(db_name)
     try:
         envs = session.query(Environment).order_by(Environment.created_at.desc()).all()
         return [
@@ -54,9 +56,9 @@ def list_environments() -> list[dict]:
         session.close()
 
 
-def get_environment(env_id: int) -> dict | None:
+def get_environment(env_id: int, db_name: str = "") -> dict | None:
     """Return a single environment dict by ID, or None."""
-    session = get_session()
+    session = get_session(db_name)
     try:
         e = session.query(Environment).filter_by(id=env_id).first()
         if not e:
@@ -72,9 +74,9 @@ def get_environment(env_id: int) -> dict | None:
         session.close()
 
 
-def delete_environment(env_id: int) -> tuple[bool, str]:
+def delete_environment(env_id: int, db_name: str = "") -> tuple[bool, str]:
     """Delete an environment and all its children (cascade)."""
-    session = get_session()
+    session = get_session(db_name)
     try:
         env = session.query(Environment).filter_by(id=env_id).first()
         if not env:

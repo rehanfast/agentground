@@ -1,6 +1,8 @@
 """
 backend/app/tool_manager.py
 Manages built-in tool listing and agent-tool assignments.
+All public functions accept db_name to route queries to the correct
+per-user database (agentground_<username>).
 """
 
 from sqlalchemy.exc import IntegrityError
@@ -8,9 +10,9 @@ from backend.app.database import get_session
 from backend.app.models import Tool, AgentTool, Agent
 
 
-def list_tools() -> list[dict]:
+def list_tools(db_name: str = "") -> list[dict]:
     """Return all tools in the tools table."""
-    session = get_session()
+    session = get_session(db_name)
     try:
         tools = session.query(Tool).order_by(Tool.id).all()
         return [
@@ -26,9 +28,9 @@ def list_tools() -> list[dict]:
         session.close()
 
 
-def get_agent_tools(agent_id: int) -> list[dict]:
+def get_agent_tools(agent_id: int, db_name: str = "") -> list[dict]:
     """Return all tools assigned to a specific agent."""
-    session = get_session()
+    session = get_session(db_name)
     try:
         assignments = (
             session.query(AgentTool)
@@ -50,7 +52,12 @@ def get_agent_tools(agent_id: int) -> list[dict]:
         session.close()
 
 
-def assign_tool(agent_id: int, tool_id: int, scope: str = "private") -> tuple[bool, str]:
+def assign_tool(
+    agent_id: int,
+    tool_id: int,
+    scope: str = "private",
+    db_name: str = "",
+) -> tuple[bool, str]:
     """
     Assign a tool to an agent.
     scope must be 'private' or 'shared'.
@@ -58,13 +65,11 @@ def assign_tool(agent_id: int, tool_id: int, scope: str = "private") -> tuple[bo
     if scope not in ("private", "shared"):
         return False, "Scope must be 'private' or 'shared'."
 
-    session = get_session()
+    session = get_session(db_name)
     try:
-        # Verify agent exists
         agent = session.query(Agent).filter_by(id=agent_id).first()
         if not agent:
             return False, "Agent not found."
-        # Verify tool exists
         tool = session.query(Tool).filter_by(id=tool_id).first()
         if not tool:
             return False, "Tool not found."
@@ -83,9 +88,9 @@ def assign_tool(agent_id: int, tool_id: int, scope: str = "private") -> tuple[bo
         session.close()
 
 
-def remove_tool_assignment(assignment_id: int) -> tuple[bool, str]:
+def remove_tool_assignment(assignment_id: int, db_name: str = "") -> tuple[bool, str]:
     """Remove a tool assignment from an agent."""
-    session = get_session()
+    session = get_session(db_name)
     try:
         at = session.query(AgentTool).filter_by(id=assignment_id).first()
         if not at:

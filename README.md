@@ -6,11 +6,15 @@ AgentGround provides isolated workspaces (environments) where AI agents can be r
 
 ---
 
-## Team
+## Features
 
-| Name | Roll No. | Role |
-|---|---|---|
-| Rehan Abid | 24L-2573 | Solo Developer |
+- **Auto Mode:** Describe your goal and let the Master Agent plan, provision sub-agents, execute them, evaluate results, and iterate autonomously.
+- **Model Registry:** Curate your own LLM endpoints (OpenAI, Google, xAI, DeepSeek, Ollama) with intelligence ranking and automatic API key rotation on rate limits.
+- **Authentication & Multi-tenancy:** Secure user registration, fast query-parameter sessions, and fully isolated per-user MySQL databases and file workspaces.
+- **Agent Pipeline Execution:** Run sequential or parallel multi-agent workflows with ease.
+- **Governance:** Strict rate limit enforcement (Max Calls, Timeout, RPM) using custom LangChain callbacks.
+- **Comprehensive Audit Trail:** Every LLM request, tool call, and response is recorded immutably.
+- **Built-in Tools:** Terminal (whitelisted commands only), Web Search (Tavily), and File Read/Write (sandboxed).
 
 ---
 
@@ -20,11 +24,11 @@ AgentGround provides isolated workspaces (environments) where AI agents can be r
 |---|---|---|
 | UI | Streamlit | Browser-based interface, no HTML/CSS/JS required |
 | Agent Framework | LangChain | Agent orchestration, tool calling, agent loops |
-| LLM Access | LangChain model wrappers | Connects to any OpenAI-compatible endpoint |
-| Built-in Tools | LangChain Community Tools | ShellTool, DuckDuckGoSearch, FileManagement |
+| LLM Access | LangChain wrappers | Connects to OpenAI-compatible, Google, xAI, DeepSeek, Ollama endpoints |
+| Built-in Tools | LangChain Community Tools | SafeShellTool, Tavily Search API, File Read/Write |
 | Database | MySQL 8.0+ | Persistent storage for all platform data |
 | ORM | SQLAlchemy 2.0 | Python-to-MySQL bridge, session management |
-| Governance | LangChain Callbacks | Token limits, call caps, execution timeouts |
+| Governance | LangChain Callbacks | Token limits, call caps, execution timeouts, RPM throttling |
 | Language | Python 3.10+ | Entire stack — backend, UI, tooling |
 
 ---
@@ -36,31 +40,44 @@ agentground/
 ├── backend/
 │   ├── app/
 │   │   ├── __init__.py
-│   │   ├── database.py           # SQLAlchemy engine and session factory
-│   │   ├── models.py             # ORM models mirroring schema.sql
-│   │   ├── env_manager.py        # Environment CRUD operations
-│   │   ├── agent_manager.py      # Agent CRUD operations
-│   │   ├── tool_manager.py       # Tool assignment and scope management
-│   │   ├── run_manager.py        # Run record lifecycle
+│   │   ├── _common.py            # UI helpers, CSS, session persistence
 │   │   ├── agent_executor.py     # LangChain agent executor, multi-agent runs
+│   │   ├── agent_manager.py      # Agent CRUD operations
 │   │   ├── audit_logger.py       # Audit log write and read operations
+│   │   ├── auth_manager.py       # User auth and per-user DB management
+│   │   ├── database.py           # SQLAlchemy engine and session factory
+│   │   ├── env_manager.py        # Environment CRUD operations
+│   │   ├── key_manager.py        # Multi-key rotation and rate-limit mitigation
+│   │   ├── model_manager.py      # Model registry CRUD
+│   │   ├── provider_adapters.py  # Multi-provider LLM factory
 │   │   ├── resource_callback.py  # LangChain callback for resource governance
+│   │   ├── run_manager.py        # Run record lifecycle
+│   │   ├── settings_manager.py   # User settings K/V storage
+│   │   ├── tool_manager.py       # Tool assignment and scope management
+│   │   ├── auto_mode/
+│   │   │   ├── __init__.py
+│   │   │   └── master_agent.py   # Autonomous orchestrator
 │   │   └── tools/
 │   │       ├── __init__.py
 │   │       └── terminal_tool.py  # Whitelisted shell tool wrapper
 │   └── requirements.txt
 ├── frontend/
 │   └── src/
+│       ├── .streamlit/
+│       │   └── config.toml       # Streamlit theme config
 │       ├── app.py                # Streamlit entry point (Home page)
 │       └── pages/
+│           ├── 0_Login.py
 │           ├── 1_Environments.py
 │           ├── 2_Agents.py
 │           ├── 3_Tools.py
 │           ├── 4_Run.py
-│           └── 5_Audit_Log.py
+│           ├── 5_Audit_Log.py
+│           ├── 6_Settings.py
+│           └── 7_Auto_Mode.py
 ├── database/
-│   ├── schema.sql                # DDL — run this before the application
-│   ├── seed.sql                  # Initial tool data
+│   ├── schema.sql                # DDL reference (Core DB)
+│   ├── seed.sql                  # Legacy tool data reference
 │   └── erd_README.txt            # Instructions for generating the ERD image
 ├── docs/
 │   ├── Iteration_1.docx          # Sprint 1 report
@@ -110,13 +127,14 @@ Log into MySQL as the system administrator:
 sudo mysql
 ```
 
-Run these commands inside the MySQL prompt to create the database, lower the local password policy, and create a dedicated app user:
+Run these commands inside the MySQL prompt to create the database:
 
 ```sql
 CREATE DATABASE IF NOT EXISTS agentground;
-SET GLOBAL validate_password.policy=LOW;
-CREATE USER IF NOT EXISTS 'agent_user'@'localhost' IDENTIFIED BY 'rehan1977';
-GRANT ALL PRIVILEGES ON agentground.* TO 'agent_user'@'localhost';
+-- IMPORTANT: The MySQL user must have privileges to CREATE and DROP 
+-- databases matching the pattern 'agentground_%' to support per-user DB isolation.
+GRANT ALL PRIVILEGES ON agentground.* TO 'root'@'localhost';
+GRANT ALL PRIVILEGES ON `agentground\_%`.* TO 'root'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
@@ -136,6 +154,7 @@ pip install -r backend/requirements.txt
 Create your .env file:
 
 ```bash
+cp .env.example .env
 nano .env
 ```
 
@@ -145,23 +164,14 @@ Fill in your MySQL credentials and any LLM API keys:
 DB_HOST=localhost
 DB_PORT=3306
 DB_USER=root
-DB_PASSWORD=your_mysql_password
+DB_PASSWORD=your_password
 DB_NAME=agentground
 
 OPENAI_API_KEY=sk-...        # if using OpenAI
-ANTHROPIC_API_KEY=...         # if using Anthropic
+TAVILY_API_KEY=tvly-...      # required for Web Search tool
 ```
 
-### 5. Run the database schema and seed data
-
-Import the tables and default data:
-
-```bash
-sudo mysql agentground < database/schema.sql
-sudo mysql agentground < database/seed.sql
-```
-
-### 6. Run the application
+### 5. Run the application
 
 ```bash
 streamlit run frontend/src/app.py
@@ -171,31 +181,7 @@ Streamlit will print a local URL, typically `http://localhost:8501`. Open it in 
 
 To stop the application, press `Ctrl + C` in the terminal.
 
-### Reset Option 1: Soft Reset (Wipe Database Data Only)
-Use this if you have been testing the app, the database is full of junk runs/logs, and you want to clear the data **without** reinstalling Python packages or deleting your project files.
-
-**1. Wipe and recreate the database:**
-Run this single command from your terminal to drop the old database and create a fresh one:
-```bash
-sudo mysql -e "DROP DATABASE IF EXISTS agentground; CREATE DATABASE agentground;"
-```
-
-**2. Re-import the fresh schema and seed data:
-Make sure you are in your agentground directory, then run:
-
-```bash
-sudo mysql agentground < database/schema.sql
-sudo mysql agentground < database/seed.sql
-```
-**3. Run the app again:
-Your venv and .env are still intact, so you can just start the app right away:
-
-```bash
-source venv/bin/activate
-streamlit run frontend/src/app.py
-```
-
-### Reset Option 2: The Nuke Option (Start from Scratch)
+### Reset Option: The Nuke Option (Start from Scratch)
 Use this if you want to completely destroy the project, the database, the user, and the virtual environment, returning your system to the state before you cloned the repository.
 
 **1. Stop the application**
@@ -204,10 +190,10 @@ If Streamlit is running, press `Ctrl + C` in your terminal. Deactivate the virtu
 deactivate
 ```
 
-**2. Delete the MySQL Database and User**
-Run this command to wipe the database and the `agent_user` from your system:
+**2. Delete the MySQL Database**
+Run this command to wipe the database and all user databases:
 ```bash
-sudo mysql -e "DROP DATABASE IF EXISTS agentground; DROP USER IF EXISTS 'agent_user'@'localhost'; FLUSH PRIVILEGES;"
+sudo mysql -e "DROP DATABASE IF EXISTS agentground;"
 ```
 
 **3. Delete the Project Files and Virtual Environment**
@@ -237,9 +223,10 @@ ollama pull llama3
 # http://localhost:11434/v1
 ```
 
-When registering an agent in AgentGround, set:
+When registering an agent or adding to the Model Registry in AgentGround, set:
+- **Provider:** Ollama (local)
 - **API Endpoint URL:** `http://localhost:11434/v1`
-- **Model Name:** `llama3`
+- **Model ID:** `llama3`
 
 No API key is needed for local models.
 
@@ -250,13 +237,4 @@ No API key is needed for local models.
 - Never commit the `.env` file. It is listed in `.gitignore`.
 - Use `.env.example` with placeholder values for version control.
 - The Terminal built-in tool only permits these commands: `ls`, `echo`, `pwd`, `cat`, `mkdir`, `date`, `whoami`, `head`, `tail`, `wc`, `find`, `grep`. All others are blocked.
-
----
-
-## Sprint Progress
-
-| Sprint | Weeks | Status | Key Deliverables |
-|---|---|---|---|
-| Sprint 1 | 1 — 2 | Complete | MySQL schema, environment and agent CRUD, Terminal tool, Streamlit UI (5 pages) |
-| Sprint 2 | 3 — 4 | Complete | LangChain agent executor, resource limits, multi-agent runs, audit log viewer |
-| Sprint 3 | 5 — 6 | Planned | Web Search and File tools, trace viewer improvements, Python module interface |
+- Path traversal ('..') is strictly blocked in the Terminal tool.

@@ -1,27 +1,28 @@
 # AgentGround — Python Dependencies
-# Install with: pip install -r requirements.txt
-# Python 3.10+ required
+# Python 3.10+  |  Install: pip install -r backend/requirements.txt
 
-# ─── UI ───────────────────────────────────────────────────────────────────────
+# UI
 streamlit==1.35.0
 
-# ─── Agent Framework ──────────────────────────────────────────────────────────
+# Agent Framework
 langchain==0.2.16
 langchain-community==0.2.16
 langchain-core<0.3.0
+# Note: xAI, DeepSeek, and Ollama are supported natively via langchain-openai
+# because they provide OpenAI-compatible endpoints.
 langchain-openai==0.1.23
-langchain-experimental==0.0.64
 
-# ─── Database ─────────────────────────────────────────────────────────────────
+# Database
 sqlalchemy==2.0.36
 pymysql==1.1.1
-cryptography==43.0.3          # required by pymysql for SSL support
+cryptography==43.0.3
 
-# ─── Environment Variables ────────────────────────────────────────────────────
+# Environment variables
 python-dotenv==1.0.1
 
-# ─── HTTP / Utilities ─────────────────────────────────────────────────────────
-requests==2.32.3
+# Web Search (requires TAVILY_API_KEY in .env)
+tavily-python==0.3.3
 
-# ─── Web Search Tool (LangChain) ──────────────────────────────────────────────
-duckduckgo-search==6.3.5
+# Google Gemini support
+langchain-google-genai==1.0.10
+google-generativeai==0.7.2

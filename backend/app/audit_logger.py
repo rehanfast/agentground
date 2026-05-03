@@ -1,12 +1,14 @@
 """
 backend/app/audit_logger.py
 Writes and reads audit log entries for agent runs.
+All public functions accept db_name to route queries to the correct
+per-user database (agentground_<username>).
 """
 
 import json
 from datetime import datetime
 from backend.app.database import get_session
-from backend.app.models import AuditLog, Run
+from backend.app.models import AuditLog
 
 
 def log_step(
@@ -15,11 +17,12 @@ def log_step(
     step_number: int,
     action_type: str,
     payload:     dict | None = None,
+    db_name:     str = "",
 ) -> None:
     """
-    Insert one step into the audit_logs table.
+    Insert one step into audit_logs.
 
-    action_type should be one of:
+    action_type values:
         'llm_request'  — prompt sent to LLM
         'llm_response' — response received from LLM
         'tool_call'    — tool invocation with input
@@ -27,16 +30,15 @@ def log_step(
         'run_stopped'  — run halted by limit or user
         'run_error'    — unexpected error during run
     """
-    session = get_session()
+    session = get_session(db_name)
     try:
-        entry = AuditLog(
+        session.add(AuditLog(
             run_id=run_id,
             agent_id=agent_id,
             step_number=step_number,
             action_type=action_type,
             payload=payload or {},
-        )
-        session.add(entry)
+        ))
         session.commit()
     except Exception:
         session.rollback()
@@ -45,9 +47,9 @@ def log_step(
         session.close()
 
 
-def get_logs(run_id: int) -> list[dict]:
+def get_logs(run_id: int, db_name: str = "") -> list[dict]:
     """Return all audit log entries for a run, ordered by step_number."""
-    session = get_session()
+    session = get_session(db_name)
     try:
         logs = (
             session.query(AuditLog)
@@ -72,7 +74,6 @@ def get_logs(run_id: int) -> list[dict]:
         session.close()
 
 
-def export_json(run_id: int) -> str:
-    """Return the full audit log for a run as a JSON string."""
-    logs = get_logs(run_id)
-    return json.dumps(logs, indent=2, default=str)
+def export_json(run_id: int, db_name: str = "") -> str:
+    """Return the full audit log for a run serialised as JSON."""
+    return json.dumps(get_logs(run_id, db_name), indent=2, default=str)
